@@ -26,8 +26,8 @@ def nextPage(): st.session_state.page += 1
 HOST = "smtp-mail.outlook.com"
 PORT = 587
 load_dotenv(".env")
-sender_email = os.getenv("EMAIL")
-password_email = os.getenv("PASSWORD")
+sender_email = st.secrets["EMAIL"]
+password_email = st.secrets["PASSWORD"]
 
 def get_otp():
     digits="0123456789"
