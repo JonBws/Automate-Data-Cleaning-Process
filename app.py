@@ -11,6 +11,7 @@ import warnings
 import numpy as np 
 import json
 from io import BytesIO
+import re
 
 if "page" not in st.session_state: st.session_state.page = 0
 if "otp" not in st.session_state: st.session_state.otp = None
@@ -36,30 +37,41 @@ def get_otp():
         OTP+=digits[math.floor(random.random()*10)]
     return OTP
 
+def is_valid_email(email):
+    regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if re.match(regex, email):
+        return True
+    else:
+        return False
+
 def send_email(receiver_email, subject):
-    OTP = get_otp()
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = formataddr(("Streamlit App", f"{sender_email}"))
-    msg["To"] = receiver_email
-    msg["BCC"] = sender_email
-    msg.add_alternative(
-        f"""\
-            <html>
-                <body>
-                    <p >Hi <strong>{receiver_email}</strong>,<p>
-                    <p>This is your verification code : <strong>{OTP}</strong> </p>
-                </body>
-            </html>
-        """,
-        subtype="html",
-    )
-    with smtplib.SMTP(HOST, PORT) as server:
-        server.starttls()
-        server.login(sender_email, password_email)
-        server.sendmail(sender_email, receiver_email, msg.as_string())
-            
-    st.session_state.otp = OTP
+    valid = is_valid_email(receiver_email)
+    if valid == True:
+        OTP = get_otp()
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = formataddr(("Streamlit App", f"{sender_email}"))
+        msg["To"] = receiver_email
+        msg["BCC"] = sender_email
+        msg.add_alternative(
+            f"""\
+                <html>
+                    <body>
+                        <p >Hi <strong>{receiver_email}</strong>,<p>
+                        <p>This is your verification code : <strong>{OTP}</strong> </p>
+                    </body>
+                </html>
+            """,
+            subtype="html",
+        )
+        with smtplib.SMTP(HOST, PORT) as server:
+            server.starttls()
+            server.login(sender_email, password_email)
+            server.sendmail(sender_email, receiver_email, msg.as_string())
+                
+        st.session_state.otp = OTP
+    else:
+        st.error("Please input valid email")
     
 def send_email_after_download():
     msg = EmailMessage()
@@ -105,10 +117,11 @@ def convert_to_dict(json_string):
           return json.loads(json_string)
     
 ph = st.empty()
+
 ## Verification Page
 if st.session_state.page == 0:
     with ph.container():
-        st.title("Email Verification")
+        st.title("Email Verification 📧")
         st.session_state.Email = st.text_input("Enter Your Email: ")
         if st.button("Sending OTP"):
             send_email(receiver_email=st.session_state.Email, subject="Streamlit Verification Code")
@@ -129,9 +142,9 @@ if st.session_state.page == 1:
     with ph.container():
         disabled_button = True
         st.markdown("## :green[Verification Sucessfull]")
-        st.markdown("##### **Please fill the form to continue**")
+        st.markdown("##### **Please fill the form to continue** ✍🏼")
         st.session_state.company = st.text_input("Company Name")
-        st.session_state.amount_of_collaborator = st.text_input("Ammount Of Collaborator")
+        st.session_state.amount_of_collaborator = st.selectbox("Ammount Of Collaborator", ["1-5","6-15","16-30","31-60","60+"])
         st.session_state.location = st.text_input("Location")
         st.session_state.industry = st.selectbox("Type of Industry", ["Option 1", "Option 2", "Option 3", "Option 4", "Option 5", "Option 6"])
         st.session_state.role = st.selectbox("Role in The Company", ["Owner", "Employeer", "Editor"])
@@ -142,16 +155,14 @@ if st.session_state.page == 1:
         
 if st.session_state.page == 2:
     with ph.container():
-        if "language" not in st.session_state: st.session_state.language = "English"
-        st.title("Upload Your Excel File")
+        st.title("Upload Your Excel File 📁")
         st.info("Your exel file must contain taxes dissagregated or impuestos desagregados column and taxes amount or monto impuestos column", icon="⚠️")
-        st.session_state.language = st.radio("Language used in the Excel file", ["English", "Spanish"])
         uploaded_file = st.file_uploader("Choose an Excel File", type="xlsx")
         if uploaded_file:
             with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     df = pd.read_excel(uploaded_file, engine = "openpyxl")
-            if st.session_state.language == "English":
+            if "TAXES_DISAGGREAGTED" and "TAXES_AMOUNT" in df.columns:
                 df1 = df[["TAXES_DISAGGREGATED", "TAXES_AMOUNT"]]
                 st.session_state.total_row = len(df1)
                 df2 = df1.copy()
@@ -172,7 +183,20 @@ if st.session_state.page == 2:
                 df5["control"] = df5["json_sum"] - df5["TAXES_AMOUNT"]
                 df.drop(["TAXES_DISAGGREGATED", "TAXES_AMOUNT"], axis=1, inplace=True)
                 final_df = pd.concat([df, df5], axis = 1)
-            else:
+                
+                output = BytesIO()
+                writer = pd.ExcelWriter(output, engine="xlsxwriter")
+                final_df.to_excel(writer, index=False, sheet_name="Sheet1")
+                writer.close()
+                data_bytes = output.getvalue()
+                
+                st.download_button(label="Download Excel",
+                               data=data_bytes,
+                               file_name="output.xlsx",
+                               on_click=send_email_after_download
+                            )
+                
+            elif "IMPUESTOS_DESAGREGADOS" and "MONTO_IMPUESTOS" in df.columns:
                 df1 = df[["IMPUESTOS_DESAGREGADOS", "MONTO_IMPUESTOS"]]
                 st.session_state.total_row = len(df1)
                 df2 = df1.copy()
@@ -193,15 +217,17 @@ if st.session_state.page == 2:
                 df5["control"] = df5["json_sum"] - df5["MONTO_IMPUESTOS"]
                 df.drop(["IMPUESTOS_DESAGREGADOS", "MONTO_IMPUESTOS"], axis=1, inplace=True)
                 final_df = pd.concat([df, df5], axis = 1)
-            
-            output = BytesIO()
-            writer = pd.ExcelWriter(output, engine="xlsxwriter")
-            final_df.to_excel(writer, index=False, sheet_name="Sheet1")
-            writer.close()
-            data_bytes = output.getvalue()
-            
-            st.download_button(label="Download Excel",
+                
+                output = BytesIO()
+                writer = pd.ExcelWriter(output, engine="xlsxwriter")
+                final_df.to_excel(writer, index=False, sheet_name="Sheet1")
+                writer.close()
+                data_bytes = output.getvalue()
+                
+                st.download_button(label="Download Excel",
                                data=data_bytes,
                                file_name="output.xlsx",
                                on_click=send_email_after_download
-            )
+                            )
+            else:
+                st.error("Your Excel file not contain taxes dissagregated or impuestos desagregados column and taxes amount or monto impuestos column")
