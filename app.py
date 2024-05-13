@@ -162,6 +162,7 @@ if st.session_state.page == 1:
         
 if st.session_state.page == 2:
     with ph.container():
+        if "total_row" not in st.session_state: st.session_state.total_row = None
         st.title("Upload Your Excel File 📁")
         st.info("Your exel file must contain taxes dissagregated or impuestos desagregados column and taxes amount or monto impuestos column", icon="⚠️")
         uploaded_file = st.file_uploader("Choose an Excel File", type="xlsx")
