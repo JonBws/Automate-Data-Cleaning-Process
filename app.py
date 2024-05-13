@@ -56,9 +56,16 @@ def send_email(receiver_email, subject):
         msg.add_alternative(
             f"""\
                 <html>
-                    <body>
-                        <p >Hi <strong>{receiver_email}</strong>,<p>
-                        <p>This is your verification code : <strong>{OTP}</strong> </p>
+                    <body style="background-color: #f5f5f5;">
+                            <p >Hi <strong>{st.session_state.Email}</strong>,<p>
+                            <p>Thank you for submitting your form. Below is a summary of the information you provided:</p>
+                            <p>Email : {st.session_state.Email} </p>
+                            <p>Company : {st.session_state.company} </p>
+                            <p>Amount Collaborator : {st.session_state.amount_of_collaborator} </p>
+                            <p>Location : {st.session_state.location} </p>
+                            <p>Type of industry : {st.session_state.industry} </p>
+                            <p>Role in The Company: {st.session_state.role} </p>
+                            <p>Total Row Number : {st.session_state.total_row} </p>
                     </body>
                 </html>
             """,
